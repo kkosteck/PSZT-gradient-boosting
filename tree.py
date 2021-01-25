@@ -1,4 +1,5 @@
 import statistics
+import timeit
 
 class Leaf:
     def __init__(self, y):
@@ -18,7 +19,7 @@ class Question:
     def match(self, x):
         val = x[self.column]
 
-        return val >= self.value
+        return val <= self.value
 
 def find_best_split(x, y):
     best_value = float("inf")
@@ -26,8 +27,14 @@ def find_best_split(x, y):
     n_features = len(x[0])
 
     for col in range(n_features):  # for each feature
-        current_value, index = best_threshold(x, y) 
-        question = Question(col, x[index][col])
+        x_sorted, y_sorted = sort_column(x, y, col)
+        current_value, threshold = best_threshold(x_sorted, y_sorted)
+        if threshold >= max(x_sorted):
+            continue
+
+        # print('Column: ' + str(col) + ', SSR: ' + str(current_value) + ', Threshold: ' + str(threshold))
+
+        question = Question(col, threshold)
         if current_value < best_value: 
             best_value = current_value
             best_question = question
@@ -36,12 +43,12 @@ def find_best_split(x, y):
 
 def best_threshold(x, y):
     lowest_sum = float('inf')
-    index = None
-    for i in range(1, len(x)):
+    threshold = 0
+    for i in range(1, len(y), int(len(y)/20)):
         avg_before_threshold = statistics.mean(y[:i])
         avg_after_threshold = statistics.mean(y[i:])
         sum_of_residuals = 0
-        for j in range(0, len(x)):
+        for j in range(0, len(y)):
             if j < i:
                 sum_of_residuals += ((y[j] - avg_before_threshold) ** 2)
             else:
@@ -49,25 +56,24 @@ def best_threshold(x, y):
 
         if sum_of_residuals < lowest_sum: 
             lowest_sum = sum_of_residuals
-            index = i
+            threshold = x[i]
     
-    return lowest_sum, index
+    return lowest_sum, threshold
 
-
-
-
-def build_tree(x, y, depth):
-    if depth == 0 or len(y) < 2:
+def build_tree(x, y, depth, MAX_LEAVES):
+    if depth <= 0 or len(y) < MAX_LEAVES:
         return Leaf(y)
     depth -= 1
 
     question = find_best_split(x, y)
+
     true_x, true_y, false_x, false_y = partition(x, y, question)
-    if not true_x or not false_x:
+
+    if len(true_x) == 0 or len(false_x) == 0:
         return Leaf(y)
 
-    true_branch = build_tree(true_x, true_y, depth)
-    false_branch = build_tree(false_x, false_y, depth)
+    true_branch = build_tree(true_x, true_y, depth, MAX_LEAVES)
+    false_branch = build_tree(false_x, false_y, depth, MAX_LEAVES)
 
     return Decision_Node(question, true_branch, false_branch)
 
@@ -80,6 +86,9 @@ def partition(x, y, question):
         else:
             false_x.append(x[i])
             false_y.append(y[i])
+    
+    # print(str(len(true_x)) + ' ' + str(len(false_x)))
+
     return true_x, true_y, false_x, false_y
 
 def find_value(root, data_row):
@@ -88,3 +97,12 @@ def find_value(root, data_row):
     if root.question.match(data_row):
         return find_value(root.true_branch, data_row)
     return find_value(root.false_branch, data_row)
+
+def sort_column(x, y, x_id):
+    column = [row[x_id] for row in x]
+    zipped_lists = zip(column, y)
+    sorted_pairs = sorted(zipped_lists)
+    tuples = zip(*sorted_pairs)
+    column, y_out = [ list(tuple) for tuple in  tuples]
+
+    return column, y_out
