@@ -4,15 +4,15 @@ import statistics
 import tree
 import timeit
 from sklearn.ensemble import GradientBoostingRegressor 
-from sklearn.model_selection import train_test_split 
+from sklearn.metrics import mean_squared_error as MSE 
 from sklearn import datasets 
 import matplotlib.pyplot as plt
 
-M = 50
+M = 400
 MAX_LEAVES = 20
 TREE_DEPTH = 4
-LEARNING_RATE = 0.1
-K_FOLD = 5
+LEARNING_RATE = 0.2
+K_FOLD = 4
 FILENAME = 'housing.csv'
 
 def loss_function(y, x):
@@ -48,7 +48,7 @@ def split_data(x, y, k):
     return x_train, y_train, x_test, y_test
 
 def sklearn_gradient_boosting(x_train, y_train, x_test, y_test):
-    gbr = GradientBoostingRegressor(n_estimators = M, max_depth = TREE_DEPTH) 
+    gbr = GradientBoostingRegressor(n_estimators = M, max_depth = TREE_DEPTH, learning_rate=LEARNING_RATE) 
     gbr.fit(x_train, y_train) 
     pred_y = gbr.predict(x_test) 
 
@@ -90,6 +90,15 @@ def gradient_boosting(x_train, y_train, x_test, y_test):
 
     return test_predicted
 
+def calculate_parameters(observed, predicted):
+    rmse = round(MSE(observed, predicted) ** (1 / 2), 3)
+    minimum = round(min(predicted), 3)
+    maximum = round(max(predicted), 3)
+    median = round(statistics.median(predicted), 3)
+    mean = round(statistics.mean(predicted), 3)
+
+    return [rmse, minimum, maximum, median, mean]
+
 def main():
     x, y = load_data()
 
@@ -97,19 +106,21 @@ def main():
     predictions = []
     y_tests = []
     for k in range(0, K_FOLD):
+        print('GBR - iteration: ' + str(k+1))
         x_train, y_train, x_test, y_test = split_data(x, y, k)
         predictions.append(gradient_boosting(x_train, y_train, x_test, y_test))
         y_tests.append(y_test)
     end = timeit.default_timer() # timestamp
-    execution_time = round(end - start, 4)
+    execution_time = round(end - start, 3)
 
     start = timeit.default_timer() # timestamp
     sk_predictions = []
     for k in range(0, K_FOLD):
+        print('sklearn - iteration: ' + str(k+1))
         x_train, y_train, x_test, y_test = split_data(x, y, k)
         sk_predictions.append(sklearn_gradient_boosting(x_train, y_train, x_test, y_test))
     end = timeit.default_timer() # timestamp
-    sk_execution_time = round(end - start, 4)
+    sk_execution_time = round(end - start, 3)
 
     # average
     prediction = [0] * len(predictions[0])
@@ -127,15 +138,41 @@ def main():
     #   PLOTS
     fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12, 5))
 
-    axes[0].set_title('Implementation')
+    axes[0].set_title('Observed and predicted values')
     axes[0].plot(prediction, c='red')
+    axes[0].plot(sk_prediction, c='green')
     axes[0].scatter(range(0, len(y_test)), y_test)
-    
-    axes[1].set_title('Sklearn')
-    axes[1].plot(sk_prediction, c='red')
-    axes[1].scatter(range(0, len(y_test)), y_test)
+    axes[0].legend(('prediction','sklearn prediction','observed'))
+    axes[0].set_xlabel('Index')
+    axes[0].set_ylabel('value')
 
+    errors, sk_errors = [], []
+    for i in range(0, len(prediction)):
+        errors.append(abs(prediction[i] - y_test[i]))
+        sk_errors.append(abs(sk_prediction[i] - y_test[i]))
+    
+    plt.style.use('seaborn-deep')
+    bins = np.linspace(0, 10, 30)
+    axes[1].hist([errors, sk_errors], bins, label=['x', 'y'])
+    axes[1].set_title('Histogram of residuals of observed and predicted values')
+    axes[1].legend(('implementation','sklearn'))
+    axes[1].set_xlabel('value')
+    axes[1].set_ylabel('quantity')
+    
+    axes[0].set_position((.07, .20, .4, .65))
+    axes[1].set_position((.55, .20, .4, .65))
+    text = "Learning rate: " + str(LEARNING_RATE) + ", k-fold: " + str(K_FOLD) + ", iterations: " + str(M) + ", tree depth: " + str(TREE_DEPTH)
+    plt.figtext(.5, .05, text , horizontalalignment ="center")
     plt.savefig('plot.png')
+
+    values = calculate_parameters(y_test, prediction)
+    values.append(execution_time)
+    sk_values = calculate_parameters(y_test, sk_prediction)
+    sk_values.append(sk_execution_time)
+    df = pd.DataFrame({'projekt': values, 'sklearn': sk_values}) 
+    df.to_excel('parameters.xlsx')
+
+
 
     print('My: ' + str(execution_time) + ', Sklearn: ' + str(sk_execution_time))
 
