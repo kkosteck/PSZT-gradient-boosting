@@ -1,6 +1,8 @@
 import statistics
 import timeit
 
+THRESHOLD_STEP = 5
+
 class Leaf:
     def __init__(self, y):
         self.value = statistics.mean(y)
@@ -44,7 +46,7 @@ def find_best_split(x, y):
 def best_threshold(x, y):
     lowest_sum = float('inf')
     threshold = 0
-    for i in range(1, len(y), int(len(y)/20)):
+    for i in range(1, len(y), int(len(y) / THRESHOLD_STEP)):
         avg_before_threshold = statistics.mean(y[:i])
         avg_after_threshold = statistics.mean(y[i:])
         sum_of_residuals = 0
